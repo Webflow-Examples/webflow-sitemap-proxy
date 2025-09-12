@@ -1,30 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sitemap Proxy (Next.js)
 
-## Getting Started
+A minimal Next.js app that proxies a Webflow sitemap, applies custom rules, and serves a final sitemap or a sitemap index if the number of URLs exceeds a configurable limit.
 
-First, run the development server:
+- Proxies from your Webflow site’s auto-generated `sitemap.xml`
+- Removes entries that match glob patterns (supports `*` and `**`)
+- Optionally adds extra URLs
+- Optionally rewrites the domain of all URLs
+- Splits the final set into multiple sub-sitemaps when the total exceeds the limit (default 45,000)
+- Exposed under a basePath so you can host it at `/config` alongside your Webflow site
 
+## How it works
+1. Fetches the source sitemap from your Webflow site (`ORIGIN_DOMAIN`), parses it, and materializes entries.
+2. Applies modifications in this order:
+   - Remove URLs matching configured patterns
+   - Add custom URLs
+   - Replace origin domain with a new domain (optional)
+3. If the final URL count is greater than the configured limit, returns a sitemap index listing chunked sub-sitemaps.
+
+### Routes
+- Sitemap index or single sitemap: `/config/sitemap.xml`
+- Sub-sitemaps (when needed): `/config/sitemap/[n].xml` (e.g. `/config/sitemap/1.xml`)
+
+> Note: The app’s basePath is `/config` (see `next.config.ts`). Adjust links accordingly if you change it.
+
+## Configuration
+
+### Environment variables
+- `ORIGIN_DOMAIN` (required): The fully-qualified origin domain to proxy from. Example: `https://www.yourdomain.com`
+- `SITEMAP_LIMIT` (optional): Integer; maximum URLs per sitemap file. Default: `45000`
+
+### App configuration file
+Edit `app/sitemap.xml/config.ts`:
+
+- `getUrlsToRemove()`
+  - Returns glob patterns to exclude from the sitemap
+  - Patterns are combined with `ORIGIN_DOMAIN`
+  - Glob syntax:
+    - `*` matches any single path segment (no `/`)
+    - `**` matches across segments (including `/`)
+  - Examples (assuming `ORIGIN_DOMAIN=https://example.com`):
+    - `"/work/*"` → matches `https://example.com/work/anything` (one segment)
+    - `"/**/blog"` → matches any URL ending in `/blog` at any depth
+
+- `getUrlsToAdd()`
+  - Returns absolute or path-based URLs to add
+  - Path-based URLs will be prefixed with `ORIGIN_DOMAIN`
+
+- `getDomainToReplace()`
+  - Return a fully-qualified domain (e.g., `https://www.newdomain.com`) to rewrite all URLs that start with `ORIGIN_DOMAIN`
+  - Return `""` to disable
+
+- `getSourceSitemapUrl()` / `getOriginDomain()` / `getSitemapLimit()`
+  - Internal helpers that read from env and provide defaults
+
+## Local development
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit:
+- `http://localhost:3000/config/sitemap.xml` → sitemap or sitemap index
+- `http://localhost:3000/config/sitemap/1.xml` → first chunk (only if index is returned)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The basePath is set to `/config` in `next.config.ts`. If you change it, the routes and index links will change accordingly.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Deploying
+You can deploy wherever you host Next.js apps. To deploy alongside your Webflow site on Webflow Cloud, see the docs:
 
-## Learn More
+- Webflow Cloud overview: https://developers.webflow.com/webflow-cloud/intro
 
-To learn more about Next.js, take a look at the following resources:
+## Webflow project settings and robots.txt
+- Keep Webflow’s auto-generated sitemap enabled (so the source `sitemap.xml` remains available at `ORIGIN_DOMAIN`).
+- Disable the setting that auto-inserts the Webflow sitemap into `robots.txt`.
+- Manually add a `robots.txt` line that points to this app’s sitemap (usually `https://yourdomain.com/config/sitemap.xml`). For example:
+  ```
+  Sitemap: https://yourdomain.com/config/sitemap.xml
+  ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## License
+MIT — see `LICENSE.md`.
