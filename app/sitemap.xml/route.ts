@@ -5,18 +5,20 @@ import {
     getUrlsToRemove, 
     getUrlsToAdd, 
     getDomainToReplace, 
-    getOriginDomain 
+    getOriginDomain,
+    getSitemapLimit
 } from './config'; // Adjust path if needed
 
 export async function GET(request: NextRequest) {
     try {
         // Fetch configuration
-        const [sourceSitemapUrl, urlsToRemove, urlsToAdd, domainToReplace, originDomain] = await Promise.all([
+        const [sourceSitemapUrl, urlsToRemove, urlsToAdd, domainToReplace, originDomain, sitemapLimit] = await Promise.all([
             getSourceSitemapUrl(),
             getUrlsToRemove(),
             getUrlsToAdd(),
             getDomainToReplace(),
-            getOriginDomain()
+            getOriginDomain(),
+            getSitemapLimit()
         ]);
 
         // Fetch the original sitemap
@@ -77,6 +79,8 @@ export async function GET(request: NextRequest) {
             // Returning original for now, but you might want to handle this differently
         }
 
+        const urls: Array<{ loc: string }> = (sitemapObject.urlset && sitemapObject.urlset.url) ? sitemapObject.urlset.url : [];
+        const totalUrls = Array.isArray(urls) ? urls.length : 0;
 
         // Configure the XML builder
         const builder = new XMLBuilder({
@@ -85,6 +89,29 @@ export async function GET(request: NextRequest) {
             format: true, // Pretty print the XML
             suppressEmptyNode: true, // Remove empty nodes like <url></url> if filtering results in empty set
         });
+
+        // If over the limit, return a sitemap index
+        if (totalUrls > sitemapLimit) {
+            const numSitemaps = Math.ceil(totalUrls / sitemapLimit);
+            const origin = request.nextUrl.origin;
+
+            const indexObject = {
+                sitemapindex: {
+                    "@_xmlns": "http://www.sitemaps.org/schemas/sitemap/0.9",
+                    sitemap: Array.from({ length: numSitemaps }, (_, i) => ({
+                        loc: `${origin}/sitemap/${i + 1}.xml`
+                    }))
+                }
+            };
+
+            const indexXml = builder.build(indexObject);
+            return new NextResponse(indexXml, {
+                status: 200,
+                headers: {
+                    // 'Content-Type': 'application/xml'
+                }
+            });
+        }
 
         // Build the modified XML
         const modifiedXml = builder.build(sitemapObject);

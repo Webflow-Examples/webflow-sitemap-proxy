@@ -52,4 +52,11 @@ export async function getOriginDomain(): Promise<string> {
         return ''; // Or throw an error if it's strictly required
     }
     return origin;
+}
+
+export async function getSitemapLimit(): Promise<number> {
+    const raw = process.env.SITEMAP_LIMIT;
+    if (!raw) return 45000;
+    const parsed = parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 45000;
 } 
