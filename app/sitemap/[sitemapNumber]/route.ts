@@ -10,7 +10,7 @@ import {
     sliceChunk
 } from '../../sitemap.xml/utils';
 
-export async function GET(request: NextRequest, context: { params: { sitemapNumber: string } }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ sitemapNumber: string }> }) {
     try {
         const pageParam = (await context.params)?.sitemapNumber.replace('.xml', '');
         const pageNumber = parseInt(pageParam, 10);
